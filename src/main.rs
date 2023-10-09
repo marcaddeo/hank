@@ -1,5 +1,7 @@
-use extism::{CurrentPlugin, Error as ExtismError, Function, Plugin, UserData, Val, ValType};
-use serde::Serialize;
+use extism::InternalExt;
+use extism::{
+    Context, CurrentPlugin, Error as ExtismError, Function, Plugin, UserData, Val, ValType,
+};
 use std::{env, error::Error, sync::Arc};
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Shard, ShardId};
@@ -12,7 +14,10 @@ fn send_message(
     outputs: &mut [Val],
     _user_data: UserData,
 ) -> Result<(), ExtismError> {
-    let input: String = plugin.memory_get_val(&inputs[0]).unwrap();
+    let input: String = plugin
+        .memory_read_str(inputs[0].i64().unwrap().try_into().unwrap())
+        .unwrap()
+        .to_string();
     println!("Hello from Rust! {} from plugin!", input);
     outputs[0] = inputs[0].clone();
     Ok(())
@@ -50,8 +55,9 @@ async fn main() -> anyhow::Result<()> {
         None,
         send_message,
     );
-    let mut plugin = Plugin::new(wasm, [f], true).unwrap();
-    let data: String = plugin.call("init", "").unwrap();
+    let ctx = Context::new();
+    let mut plugin = Plugin::new(&ctx, wasm, [f], true).unwrap();
+    let data: String = String::from_utf8(plugin.call("init", "").unwrap().to_vec()).unwrap();
 
     dbg!(data);
 
