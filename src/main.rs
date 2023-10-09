@@ -1,8 +1,22 @@
+use extism::{CurrentPlugin, Error as ExtismError, Function, Plugin, UserData, Val, ValType};
+use serde::Serialize;
 use std::{env, error::Error, sync::Arc};
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Shard, ShardId};
 use twilight_http::Client as HttpClient;
 use twilight_model::gateway::Intents;
+
+fn send_message(
+    plugin: &mut CurrentPlugin,
+    inputs: &[Val],
+    outputs: &mut [Val],
+    _user_data: UserData,
+) -> Result<(), ExtismError> {
+    let input: String = plugin.memory_get_val(&inputs[0]).unwrap();
+    println!("Hello from Rust! {} from plugin!", input);
+    outputs[0] = inputs[0].clone();
+    Ok(())
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -26,6 +40,20 @@ async fn main() -> anyhow::Result<()> {
     let cache = InMemoryCache::builder()
         .resource_types(ResourceType::MESSAGE)
         .build();
+
+    let wasm = include_bytes!("../plugins/ping/target/wasm32-unknown-unknown/release/ping.wasm");
+
+    let f = Function::new(
+        "send_message",
+        [ValType::I64],
+        [ValType::I64],
+        None,
+        send_message,
+    );
+    let mut plugin = Plugin::new(wasm, [f], true).unwrap();
+    let data: String = plugin.call("init", "").unwrap();
+
+    dbg!(data);
 
     // Process each event as they come in.
     loop {
@@ -56,7 +84,7 @@ async fn handle_event(
     http: Arc<HttpClient>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     match event {
-        Event::MessageCreate(msg) if msg.content == "!ping" => {
+        Event::MessageCreate(msg) if msg.content == "!piing" => {
             http.create_message(msg.channel_id)
                 .content("Pong!")?
                 .await?;
@@ -67,4 +95,3 @@ async fn handle_event(
 
     Ok(())
 }
-
