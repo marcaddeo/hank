@@ -31,13 +31,7 @@ impl<'a> Plugin<'a> {
         let wasm =
             include_bytes!("../plugins/ping/target/wasm32-unknown-unknown/release/ping.wasm");
 
-        let f = Function::new(
-            "send_message",
-            [ValType::I64],
-            [ValType::I64],
-            None,
-            send_message,
-        );
+        let f = Function::new("send_message", [ValType::I64], [], None, send_message);
         let mut plugin = extism::Plugin::create(wasm, [f], true).unwrap();
         let output = plugin.call("init", "").unwrap();
 
@@ -83,7 +77,7 @@ fn plugin_manager() -> &'static Mutex<PluginManager<'static>> {
 fn send_message(
     plugin: &mut extism::CurrentPlugin,
     inputs: &[Val],
-    outputs: &mut [Val],
+    _outputs: &mut [Val],
     _user_data: UserData,
 ) -> Result<(), extism::Error> {
     let message: String = plugin
@@ -100,7 +94,6 @@ fn send_message(
         false,
     );
 
-    outputs[0] = inputs[0].clone();
     Ok(())
 }
 

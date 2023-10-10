@@ -11,7 +11,7 @@ pub struct Message {
 
 #[host_fn]
 extern "ExtismHost" {
-    pub fn send_message(data: Json<Message>) -> String;
+    pub fn send_message(data: Json<Message>);
 }
 
 #[plugin_fn]
