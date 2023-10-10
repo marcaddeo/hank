@@ -1,48 +1,13 @@
+use discord::model::Event;
+use discord::Discord;
 use extism::InternalExt;
 use extism::{Function, UserData, Val, ValType};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::{env, error::Error};
-use twilight_cache_inmemory::{InMemoryCache, ResourceType};
-use twilight_gateway::{Event, Shard, ShardId};
-use twilight_http::Client as HttpClient;
-use twilight_model::{gateway::Intents, id::Id};
+use tracing::*;
 
-// use std::any::{Any, TypeId};
-// struct Subscriber {
-//     event: TypeId,
-//     handler: Box<dyn Fn(&mut dyn Any)>,
-// }
-
-// struct Dispatcher {
-//     subscribers: Vec<Subscriber>,
-// }
-
-// impl Dispatcher {
-//     pub fn new() -> Self {
-//         Self {
-//             subscribers: Vec::new(),
-//         }
-//     }
-
-//     pub fn add_subscriber<Event: 'static>(&mut self, action: impl Fn(&mut Event) + 'static) {
-//         self.subscribers.push(Subscriber {
-//             event: TypeId::of::<Event>(),
-//             handler: Box::new(move |event: &mut dyn Any| {
-//                 (action)(event.downcast_mut().expect("Wrong Event!"))
-//             }),
-//         });
-//     }
-
-//     pub fn dispatch<Event: 'static>(&self, event: &mut Event) {
-//         for listener in self.subscribers.iter() {
-//             if TypeId::of::<Event>() == listener.event {
-//                 (listener.handler)(event);
-//             }
-//         }
-//     }
-// }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
     pub channel_id: u64,
@@ -99,14 +64,15 @@ impl<'a> PluginManager<'a> {
     fn dispatch(&mut self, _event: &str, arg: &str) {
         let plugin = self.plugins.get_mut(0).unwrap();
 
-        dbg!("here");
-        plugin.plugin.call("ping_handler", arg).unwrap();
+        let _ = plugin.plugin.call("ping_handler", arg);
     }
 }
 
-fn http() -> &'static Arc<HttpClient> {
-    static HTTP: OnceLock<Arc<HttpClient>> = OnceLock::new();
-    HTTP.get_or_init(|| Arc::new(HttpClient::new(env::var("DISCORD_TOKEN").unwrap())))
+fn discord() -> &'static Arc<Discord> {
+    static DISCORD: OnceLock<Arc<Discord>> = OnceLock::new();
+    DISCORD.get_or_init(|| {
+        Arc::new(Discord::from_bot_token(&env::var("DISCORD_TOKEN").unwrap()).unwrap())
+    })
 }
 
 fn plugin_manager() -> &'static Mutex<PluginManager<'static>> {
@@ -124,106 +90,50 @@ fn send_message(
         .memory_read_str(inputs[0].i64().unwrap().try_into().unwrap())
         .unwrap()
         .to_string();
+    let message: Message = serde_json::from_str(&message).unwrap();
 
-    // let message: Message = serde_json::from_str(&message).unwrap();
-    let message = Message {
-        channel_id: 1046434727978078302,
-        content: "Pong!".into(),
-    };
-
-    let http = Arc::clone(&http());
-    let handle = tokio::runtime::Handle::current();
-    let _ = handle.enter();
-    dbg!("Attempting to send message...");
-    futures::executor::block_on(async {
-        let res = http
-            .create_message(Id::new(1046434727978078302))
-            .content(&message.content)
-            .expect("failed to send message")
-            .await
-            .expect("Failed to send message");
-    });
-    dbg!("Here2");
+    let discord = Arc::clone(&discord());
+    let _ = discord.send_message(
+        discord::model::ChannelId(message.channel_id),
+        &message.content,
+        "",
+        false,
+    );
 
     outputs[0] = inputs[0].clone();
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() {
     // Initialize the tracing subscriber.
     tracing_subscriber::fmt::init();
 
-    let token = env::var("DISCORD_TOKEN")?;
+    // Log in to Discord using a bot token from the environment
+    let discord =
+        Discord::from_bot_token(&env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN missing"))
+            .expect("login failed");
 
-    // Use intents to only receive guild message events.
-    let mut shard = Shard::new(
-        ShardId::ONE,
-        token.clone(),
-        Intents::GUILD_MESSAGES | Intents::MESSAGE_CONTENT,
-    );
-
-    // Since we only care about new messages, make the cache only
-    // cache new messages.
-    let cache = InMemoryCache::builder()
-        .resource_types(ResourceType::MESSAGE)
-        .build();
-
-    // let wasm = include_bytes!("../plugins/ping/target/wasm32-unknown-unknown/release/ping.wasm");
-
-    // let f = Function::new(
-    //     "send_message",
-    //     [ValType::I64],
-    //     [ValType::I64],
-    //     None,
-    //     send_message,
-    // );
-    // let mut plugin = extism::Plugin::create(wasm, [f], true).unwrap();
-    // let output = plugin.call("init", "").unwrap();
-
-    // let _subscribed_events: SubscribedEvents =
-    //     serde_json::from_str(std::str::from_utf8(output).unwrap()).unwrap();
-
-    // Process each event as they come in.
+    // Establish and use a websocket connection
+    let (mut connection, _) = discord.connect().expect("Connect failed");
+    info!("Ready.");
     loop {
-        let event = match shard.next_event().await {
-            Ok(event) => event,
-            Err(source) => {
-                tracing::warn!(?source, "error receiving event");
+        match connection.recv_event() {
+            Ok(Event::MessageCreate(msg)) => {
+                info!("{} says: {}", msg.author.name, msg.content);
 
-                if source.is_fatal() {
-                    break;
-                }
+                let json = serde_json::to_string(&msg.clone()).unwrap();
 
-                continue;
+                plugin_manager()
+                    .lock()
+                    .unwrap()
+                    .dispatch("MessageCreate", &json);
             }
-        };
-
-        // Update the cache with the event.
-        cache.update(&event);
-
-        tokio::task::spawn(handle_event(event));
-    }
-
-    Ok(())
-}
-
-async fn handle_event(event: Event) -> Result<(), Box<dyn Error + Send + Sync>> {
-    match event {
-        Event::MessageCreate(msg) => {
-            let json = serde_json::to_string(&msg.clone()).unwrap();
-
-            plugin_manager()
-                .lock()
-                .unwrap()
-                .dispatch("MessageCreate", &json);
-            // http.create_message(msg.channel_id)
-            //     .content("Pong!")?
-            //     .await?;
+            Ok(_) => {}
+            Err(discord::Error::Closed(code, body)) => {
+                error!("Gateway closed on us with code {:?}: {}", code, body);
+                break;
+            }
+            Err(err) => error!("Receive error: {:?}", err),
         }
-        // Other events here...
-        _ => {}
     }
-
-    Ok(())
 }

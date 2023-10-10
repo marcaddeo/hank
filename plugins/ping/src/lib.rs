@@ -5,35 +5,28 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Message {
-    pub channel_id: String,
-    pub content: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MessageOut {
     pub channel_id: u64,
     pub content: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct MessageCreate(pub Message);
-
 #[host_fn]
 extern "ExtismHost" {
-    pub fn send_message(data: Json<MessageOut>) -> String;
+    pub fn send_message(data: Json<Message>) -> String;
 }
 
 #[plugin_fn]
-pub fn ping_handler(Json(msg): Json<MessageCreate>) -> FnResult<()> {
+pub fn ping_handler(Json(msg): Json<Message>) -> FnResult<()> {
     info!("ping_handler");
 
-    let message = MessageOut {
-        channel_id: 1046434727978078302,
-        content: "Pong!".into(),
-    };
+    if msg.content == "!ping" {
+        let message = Message {
+            channel_id: msg.channel_id,
+            content: "Pong!".into(),
+        };
 
-    unsafe {
-        let _ = send_message(Json(message));
+        unsafe {
+            let _ = send_message(Json(message));
+        }
     }
 
     Ok(())
