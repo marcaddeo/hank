@@ -1,32 +1,54 @@
 use extism_pdk::*;
-use serde::Serialize;
+use map_macro::hash_map_e;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
-mod test {
-    use crate::host_fn;
-
-    #[host_fn]
-    extern "ExtismHost" {
-        pub fn send_message(content: String) -> String;
-    }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Message {
+    pub channel_id: String,
+    pub content: String,
 }
 
-// #[plugin_fn]
-// pub fn ping_handler() {}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MessageOut {
+    pub channel_id: u64,
+    pub content: String,
+}
 
-#[derive(Serialize)]
-struct RegisteredEvents(pub Vec<(String, String)>);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct MessageCreate(pub Message);
+
+#[host_fn]
+extern "ExtismHost" {
+    pub fn send_message(data: Json<MessageOut>) -> String;
+}
 
 #[plugin_fn]
-pub fn init(_: ()) -> FnResult<Json<RegisteredEvents>> {
-    let events = vec![("MessageCreate".into(), "ping_handler".into())];
+pub fn ping_handler(Json(msg): Json<MessageCreate>) -> FnResult<()> {
+    info!("ping_handler");
+
+    let message = MessageOut {
+        channel_id: 1046434727978078302,
+        content: "Pong!".into(),
+    };
 
     unsafe {
-        let res = test::send_message("Test".into()).unwrap();
-        info!("sent message");
-        info!("Rust response: {}", res);
+        let _ = send_message(Json(message));
     }
 
-    Ok(Json(RegisteredEvents(events)))
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct SubscribedEvents<'a>(HashMap<&'a str, Vec<&'a str>>);
+
+#[plugin_fn]
+pub fn init(_: ()) -> FnResult<Json<SubscribedEvents<'static>>> {
+    let events: HashMap<&str, Vec<&str>> = hash_map_e! {
+        "MessageCreate" => vec!["ping_handler"],
+    };
+
+    Ok(Json(SubscribedEvents(events)))
 }
 
 pub fn add(left: usize, right: usize) -> usize {
