@@ -1,12 +1,19 @@
+use anyhow::{bail, Result};
+use clap::Parser;
+use cli::{Cli, Commands, HankArgs};
+use conf::Conf;
 use discord::model::Event;
 use discord::Discord;
 use extism::InternalExt;
 use extism::{Function, UserData, Val, ValType};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::env;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::*;
+
+mod cli;
+mod conf;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
@@ -14,27 +21,33 @@ pub struct Message {
     pub content: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HankEvent {
+    pub name: String,
+    pub payload: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct SubscribedEvents(pub HashMap<String, Vec<String>>);
+struct SubscribedEvents(pub Vec<String>);
 
 #[allow(dead_code)]
 struct Plugin<'a> {
-    /// A map of events that this plugin subscribes to along with a list of function names that
-    /// should be called for each event.
+    /// A list of events the plugin subscribes to.
     pub subscribed_events: SubscribedEvents,
 
     pub plugin: extism::Plugin<'a>,
 }
 
+//
 impl<'a> Plugin<'a> {
-    fn new() -> Self {
-        let wasm =
-            include_bytes!("../plugins/ping/target/wasm32-unknown-unknown/release/ping.wasm");
-
+    fn new<T: Into<PathBuf>>(path: T) -> Self {
         let f = Function::new("send_message", [ValType::I64], [], None, send_message);
-        let mut plugin = extism::Plugin::create(wasm, [f], true).unwrap();
-        let output = plugin.call("init", "").unwrap();
 
+        let manifest = extism::Manifest::new(vec![path.into()]);
+        let mut plugin = extism::Plugin::create_with_manifest(&manifest, [f], true).unwrap();
+
+        // Call the plugins "init" function to get a list of subscribed events.
+        let output = plugin.call("init", "").unwrap();
         let subscribed_events: SubscribedEvents =
             serde_json::from_str(std::str::from_utf8(output).unwrap()).unwrap();
 
@@ -43,6 +56,19 @@ impl<'a> Plugin<'a> {
             plugin,
         }
     }
+
+    fn handle_event(&mut self, event: HankEvent) {
+        let res = self
+            .plugin
+            .call("handle_event", serde_json::to_string(&event).unwrap());
+
+        match res {
+            Ok(_) => (),
+            Err(e) => {
+                error!("{}", e);
+            }
+        };
+    }
 }
 
 struct PluginManager<'a> {
@@ -50,15 +76,22 @@ struct PluginManager<'a> {
 }
 
 impl<'a> PluginManager<'a> {
-    fn new() -> Self {
-        let plugins = vec![Plugin::new()];
+    fn new<T: Into<PathBuf>>(paths: Vec<T>) -> Self {
+        let mut plugins: Vec<Plugin> = vec![];
+
+        for path in paths {
+            plugins.push(Plugin::new(path));
+        }
+
         Self { plugins }
     }
 
-    fn dispatch(&mut self, _event: &str, arg: &str) {
-        let plugin = self.plugins.get_mut(0).unwrap();
-
-        let _ = plugin.plugin.call("ping_handler", arg);
+    fn dispatch(&mut self, event: HankEvent) {
+        for plugin in self.plugins.iter_mut() {
+            if plugin.subscribed_events.0.contains(&event.name) {
+                plugin.handle_event(event.clone());
+            }
+        }
     }
 }
 
@@ -69,9 +102,9 @@ fn discord() -> &'static Arc<Discord> {
     })
 }
 
-fn plugin_manager() -> &'static Mutex<PluginManager<'static>> {
+fn plugin_manager(config: Conf) -> &'static Mutex<PluginManager<'static>> {
     static PLUGIN_MANAGER: OnceLock<Mutex<PluginManager>> = OnceLock::new();
-    PLUGIN_MANAGER.get_or_init(|| Mutex::new(PluginManager::new()))
+    PLUGIN_MANAGER.get_or_init(|| Mutex::new(PluginManager::new(config.plugins)))
 }
 
 fn send_message(
@@ -97,29 +130,43 @@ fn send_message(
     Ok(())
 }
 
-fn main() {
+fn init(config_path: Option<PathBuf>) -> Result<()> {
+    // @TODO this will overwrite an existing config with no warning.
+    let config_path = conf::write_config_template(config_path)?;
+    let config_path_str = match config_path.to_str() {
+        Some(s) => s,
+        None => bail!("Could not convert path to string"),
+    };
+    println!("Configuration file created: {}", config_path_str);
+
+    Ok(())
+}
+
+fn run(args: Option<HankArgs>) -> Result<()> {
+    let config_path = match args {
+        Some(args) => args.config_path,
+        None => None,
+    };
+    let config = Conf::load(config_path)?;
+
     // Initialize the tracing subscriber.
     tracing_subscriber::fmt::init();
 
-    // Log in to Discord using a bot token from the environment
-    let discord =
-        Discord::from_bot_token(&env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN missing"))
-            .expect("login failed");
-
     // Establish and use a websocket connection
-    let (mut connection, _) = discord.connect().expect("Connect failed");
+    let (mut connection, _) = discord().connect().expect("Connect failed");
     info!("Ready.");
     loop {
         match connection.recv_event() {
             Ok(Event::MessageCreate(msg)) => {
-                info!("{} says: {}", msg.author.name, msg.content);
+                let event = HankEvent {
+                    name: "MessageCreate".into(),
+                    payload: serde_json::to_string(&msg.clone()).unwrap(),
+                };
 
-                let json = serde_json::to_string(&msg.clone()).unwrap();
-
-                plugin_manager()
+                plugin_manager(config.clone())
                     .lock()
                     .unwrap()
-                    .dispatch("MessageCreate", &json);
+                    .dispatch(event);
             }
             Ok(_) => {}
             Err(discord::Error::Closed(code, body)) => {
@@ -129,4 +176,18 @@ fn main() {
             Err(err) => error!("Receive error: {:?}", err),
         }
     }
+
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    match &cli.command {
+        Some(Commands::ConfigTemplate) => conf::print_config_template(),
+        Some(Commands::Init { config_path }) => init(config_path.clone())?,
+        None => run(cli.args)?,
+    }
+
+    Ok(())
 }

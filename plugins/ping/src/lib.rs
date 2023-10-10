@@ -1,12 +1,16 @@
 use extism_pdk::*;
-use map_macro::hash_map_e;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Message {
     pub channel_id: u64,
     pub content: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HankEvent {
+    pub name: String,
+    pub payload: String,
 }
 
 #[host_fn]
@@ -15,17 +19,19 @@ extern "ExtismHost" {
 }
 
 #[plugin_fn]
-pub fn ping_handler(Json(msg): Json<Message>) -> FnResult<()> {
-    info!("ping_handler");
+pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<()> {
+    if event.name == "MessageCreate" {
+        let payload: Message = serde_json::from_str(&event.payload).unwrap();
 
-    if msg.content == "!ping" {
-        let message = Message {
-            channel_id: msg.channel_id,
-            content: "Pong!".into(),
-        };
+        if payload.content == "!ping" {
+            let message = Message {
+                channel_id: payload.channel_id,
+                content: "Pong!".into(),
+            };
 
-        unsafe {
-            let _ = send_message(Json(message));
+            unsafe {
+                let _ = send_message(Json(message));
+            }
         }
     }
 
@@ -33,15 +39,11 @@ pub fn ping_handler(Json(msg): Json<Message>) -> FnResult<()> {
 }
 
 #[derive(Debug, Serialize)]
-struct SubscribedEvents<'a>(HashMap<&'a str, Vec<&'a str>>);
+struct SubscribedEvents<'a>(Vec<&'a str>);
 
 #[plugin_fn]
 pub fn init(_: ()) -> FnResult<Json<SubscribedEvents<'static>>> {
-    let events: HashMap<&str, Vec<&str>> = hash_map_e! {
-        "MessageCreate" => vec!["ping_handler"],
-    };
-
-    Ok(Json(SubscribedEvents(events)))
+    Ok(Json(SubscribedEvents(vec!["MessageCreate"])))
 }
 
 pub fn add(left: usize, right: usize) -> usize {
