@@ -41,7 +41,7 @@ fn send_message(
         .to_string();
     let message: Message = serde_json::from_str(&message).unwrap();
 
-    let discord = Arc::clone(&discord());
+    let discord = Arc::clone(discord());
     let _ = discord.send_message(
         discord::model::ChannelId(message.channel_id),
         &message.content,
