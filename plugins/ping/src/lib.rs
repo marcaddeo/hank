@@ -1,17 +1,5 @@
 use extism_pdk::*;
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Message {
-    pub channel_id: u64,
-    pub content: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HankEvent {
-    pub name: String,
-    pub payload: String,
-}
+use hank_transport::{HankEvent, Message, SubscribedEvents};
 
 #[host_fn]
 extern "ExtismHost" {
@@ -38,25 +26,18 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<()> {
     Ok(())
 }
 
-#[derive(Debug, Serialize)]
-struct SubscribedEvents<'a>(Vec<&'a str>);
-
 #[plugin_fn]
-pub fn init(_: ()) -> FnResult<Json<SubscribedEvents<'static>>> {
-    Ok(Json(SubscribedEvents(vec!["MessageCreate"])))
+pub fn init(_: ()) -> FnResult<Json<SubscribedEvents>> {
+    Ok(Json(SubscribedEvents(vec!["MessageCreate".into()])))
 }
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+//     #[test]
+//     fn it_works() {
+//         let result = add(2, 2);
+//         assert_eq!(result, 4);
+//     }
+// }

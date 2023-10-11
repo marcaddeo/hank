@@ -6,7 +6,7 @@ use discord::model::Event;
 use discord::Discord;
 use extism::InternalExt;
 use extism::{Function, UserData, Val, ValType};
-use serde::{Deserialize, Serialize};
+use hank_transport::{HankEvent, Message, SubscribedEvents};
 use std::env;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -14,21 +14,6 @@ use tracing::*;
 
 mod cli;
 mod conf;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Message {
-    pub channel_id: u64,
-    pub content: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HankEvent {
-    pub name: String,
-    pub payload: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SubscribedEvents(pub Vec<String>);
 
 #[allow(dead_code)]
 struct Plugin<'a> {
