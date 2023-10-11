@@ -64,12 +64,8 @@ fn init(config_path: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn run(args: Option<HankArgs>) -> Result<()> {
-    let config_path = match args {
-        Some(args) => args.config_path,
-        None => None,
-    };
-    let config = Conf::load(config_path)?;
+fn run(args: HankArgs) -> Result<()> {
+    let config = Conf::load(args.config_path)?;
 
     // Establish and use a websocket connection
     let (mut connection, _) = discord().connect().expect("Connect failed");

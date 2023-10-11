@@ -25,7 +25,7 @@ pub enum Commands {
 #[command(args_conflicts_with_subcommands(true))]
 pub struct Cli {
     #[command(flatten)]
-    pub args: Option<HankArgs>,
+    pub args: HankArgs,
 
     #[command(subcommand)]
     pub command: Option<Commands>,
