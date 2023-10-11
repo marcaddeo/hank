@@ -7,7 +7,6 @@ edition = "2021"
 members = [
 	"plugins/ping",
 	"lib/hank-transport",
-	"lib/hank-functions",
 ]
 
 [dependencies]
@@ -27,6 +26,3 @@ xdg = "2.5.2"
 
 [dependencies.hank-transport]
 path = "lib/hank-transport"
-
-[dependencies.hank-functions]
-path = "lib/hank-functions"

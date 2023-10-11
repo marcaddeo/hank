@@ -3,20 +3,53 @@ use clap::Parser;
 use cli::{Cli, Commands, HankArgs};
 use conf::Conf;
 use discord::model::Event;
-use hank_functions::discord;
-use hank_transport::HankEvent;
+use discord::Discord;
+use extism::InternalExt;
+use extism::{UserData, Val};
+use hank_transport::{HankEvent, Message};
 use plugin::PluginManager;
+use std::env;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tracing::*;
 
 mod cli;
 mod conf;
 mod plugin;
 
+fn discord() -> &'static Arc<Discord> {
+    static DISCORD: OnceLock<Arc<Discord>> = OnceLock::new();
+    DISCORD.get_or_init(|| {
+        Arc::new(Discord::from_bot_token(&env::var("DISCORD_TOKEN").unwrap()).unwrap())
+    })
+}
+
 fn plugin_manager(config: Conf) -> &'static Mutex<PluginManager<'static>> {
     static PLUGIN_MANAGER: OnceLock<Mutex<PluginManager>> = OnceLock::new();
     PLUGIN_MANAGER.get_or_init(|| Mutex::new(PluginManager::new(config.plugins)))
+}
+
+fn send_message(
+    plugin: &mut extism::CurrentPlugin,
+    inputs: &[Val],
+    _outputs: &mut [Val],
+    _user_data: UserData,
+) -> Result<(), extism::Error> {
+    let message: String = plugin
+        .memory_read_str(inputs[0].i64().unwrap().try_into().unwrap())
+        .unwrap()
+        .to_string();
+    let message: Message = serde_json::from_str(&message).unwrap();
+
+    let discord = Arc::clone(discord());
+    let _ = discord.send_message(
+        discord::model::ChannelId(message.channel_id),
+        &message.content,
+        "",
+        false,
+    );
+
+    Ok(())
 }
 
 fn init(config_path: Option<PathBuf>) -> Result<()> {

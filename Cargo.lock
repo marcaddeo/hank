@@ -1060,7 +1060,6 @@ dependencies = [
  "extism",
  "extism-convert",
  "extism-pdk",
- "hank-functions",
  "hank-transport",
  "map-macro",
  "serde",
@@ -1068,17 +1067,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "xdg",
-]
-
-[[package]]
-name = "hank-functions"
-version = "0.1.0"
-dependencies = [
- "discord",
- "extism",
- "hank-transport",
- "serde",
- "serde_json",
 ]
 
 [[package]]
