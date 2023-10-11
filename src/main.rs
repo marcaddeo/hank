@@ -149,9 +149,6 @@ fn run(args: Option<HankArgs>) -> Result<()> {
     };
     let config = Conf::load(config_path)?;
 
-    // Initialize the tracing subscriber.
-    tracing_subscriber::fmt::init();
-
     // Establish and use a websocket connection
     let (mut connection, _) = discord().connect().expect("Connect failed");
     info!("Ready.");
@@ -181,6 +178,9 @@ fn run(args: Option<HankArgs>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    // Initialize the tracing subscriber.
+    tracing_subscriber::fmt::init();
+
     let cli = Cli::parse();
 
     match &cli.command {
