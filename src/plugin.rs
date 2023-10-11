@@ -4,7 +4,6 @@ use hank_transport::{HankEvent, SubscribedEvents};
 use std::path::PathBuf;
 use tracing::error;
 
-#[allow(dead_code)]
 struct Plugin<'a> {
     /// A list of events the plugin subscribes to.
     pub subscribed_events: SubscribedEvents,
