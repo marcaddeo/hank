@@ -5,8 +5,7 @@ use conf::Conf;
 use discord::model::Event;
 use discord::Discord;
 use hank_transport::HankEvent;
-use plugin::PluginManager;
-use std::env;
+use plugin::Plugin;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::*;
@@ -16,16 +15,45 @@ mod conf;
 mod functions;
 mod plugin;
 
+static DISCORD: OnceLock<Arc<Discord>> = OnceLock::new();
 fn discord() -> &'static Arc<Discord> {
-    static DISCORD: OnceLock<Arc<Discord>> = OnceLock::new();
-    DISCORD.get_or_init(|| {
-        Arc::new(Discord::from_bot_token(&env::var("DISCORD_TOKEN").unwrap()).unwrap())
-    })
+    DISCORD.get().expect("Discord has not been initialized")
 }
 
-fn plugin_manager(config: Conf) -> &'static Mutex<PluginManager<'static>> {
-    static PLUGIN_MANAGER: OnceLock<Mutex<PluginManager>> = OnceLock::new();
-    PLUGIN_MANAGER.get_or_init(|| Mutex::new(PluginManager::new(config.plugins)))
+pub struct Hank<'a> {
+    pub config: Conf,
+    pub plugins: Vec<Plugin<'a>>,
+}
+
+static HANK: OnceLock<Mutex<Hank>> = OnceLock::new();
+impl Hank<'_> {
+    pub fn global() -> &'static Mutex<Self> {
+        HANK.get().expect("Hank has not been initialized.")
+    }
+
+    pub fn from_config(config: Conf) -> Self {
+        let mut plugins: Vec<Plugin> = vec![];
+
+        for path in config.clone().plugins {
+            plugins.push(Plugin::new(path));
+        }
+
+        // Initialize the Discord global singleton.
+        let discord = Discord::from_bot_token(&config.discord_token).unwrap();
+        DISCORD
+            .set(Arc::new(discord))
+            .unwrap_or_else(|_| panic!("Unable to initialize Discord"));
+
+        Self { config, plugins }
+    }
+
+    pub fn dispatch(&mut self, event: HankEvent) {
+        for plugin in self.plugins.iter_mut() {
+            if plugin.subscribed_events.0.contains(&event.name) {
+                plugin.handle_event(event.clone());
+            }
+        }
+    }
 }
 
 fn init(config_path: Option<PathBuf>) -> Result<()> {
@@ -43,6 +71,14 @@ fn init(config_path: Option<PathBuf>) -> Result<()> {
 fn run(args: HankArgs) -> Result<()> {
     let config = Conf::load(args.config_path)?;
 
+    // Initialize Hank as a singleton.
+    let hank = Hank::from_config(config);
+    HANK.set(hank.into())
+        .unwrap_or_else(|_| panic!("Unable to initialize Hank"));
+
+    // Grab the global Hank Mutex.
+    let hank = Hank::global();
+
     // Establish and use a websocket connection
     let (mut connection, _) = discord().connect().expect("Connect failed");
     info!("Ready.");
@@ -54,10 +90,7 @@ fn run(args: HankArgs) -> Result<()> {
                     payload: serde_json::to_string(&msg.clone()).unwrap(),
                 };
 
-                plugin_manager(config.clone())
-                    .lock()
-                    .unwrap()
-                    .dispatch(event);
+                hank.lock().unwrap().dispatch(event);
             }
             Ok(_) => {}
             Err(discord::Error::Closed(code, body)) => {

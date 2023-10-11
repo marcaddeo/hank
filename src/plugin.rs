@@ -4,7 +4,7 @@ use hank_transport::{HankEvent, SubscribedEvents};
 use std::path::PathBuf;
 use tracing::error;
 
-struct Plugin<'a> {
+pub struct Plugin<'a> {
     /// A list of events the plugin subscribes to.
     pub subscribed_events: SubscribedEvents,
 
@@ -40,29 +40,5 @@ impl<'a> Plugin<'a> {
                 error!("{}", e);
             }
         };
-    }
-}
-
-pub struct PluginManager<'a> {
-    plugins: Vec<Plugin<'a>>,
-}
-
-impl<'a> PluginManager<'a> {
-    pub fn new<T: Into<PathBuf>>(paths: Vec<T>) -> Self {
-        let mut plugins: Vec<Plugin> = vec![];
-
-        for path in paths {
-            plugins.push(Plugin::new(path));
-        }
-
-        Self { plugins }
-    }
-
-    pub fn dispatch(&mut self, event: HankEvent) {
-        for plugin in self.plugins.iter_mut() {
-            if plugin.subscribed_events.0.contains(&event.name) {
-                plugin.handle_event(event.clone());
-            }
-        }
     }
 }

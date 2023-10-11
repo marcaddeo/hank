@@ -4,6 +4,9 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug, Config)]
 pub struct Conf {
+    /// The discord bot token.
+    pub discord_token: String,
+
     /// A list of absolute paths to plugin .wasm files to load.
     pub plugins: Vec<PathBuf>,
 }
