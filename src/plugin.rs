@@ -1,5 +1,5 @@
-use crate::send_message;
 use extism::{Function, ValType};
+use hank_functions::send_message;
 use hank_transport::{HankEvent, SubscribedEvents};
 use std::path::PathBuf;
 use tracing::error;
