@@ -7,7 +7,7 @@ use discord::Discord;
 use hank_transport::HankEvent;
 use plugin::Plugin;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use tracing::*;
 
 mod cli;
@@ -25,13 +25,8 @@ pub struct Hank<'a> {
     pub plugins: Vec<Plugin<'a>>,
 }
 
-static HANK: OnceLock<Mutex<Hank>> = OnceLock::new();
 impl Hank<'_> {
-    pub fn global() -> &'static Mutex<Self> {
-        HANK.get().expect("Hank has not been initialized.")
-    }
-
-    pub fn from_config(config: Conf) -> Self {
+    pub fn new(config: Conf) -> Self {
         let mut plugins: Vec<Plugin> = vec![];
 
         for path in config.clone().plugins {
@@ -50,7 +45,7 @@ impl Hank<'_> {
     pub fn dispatch(&mut self, event: HankEvent) {
         for plugin in self.plugins.iter_mut() {
             if plugin.subscribed_events.0.contains(&event.name) {
-                plugin.handle_event(event.clone());
+                plugin.handle_event(&event);
             }
         }
     }
@@ -71,13 +66,8 @@ fn init(config_path: Option<PathBuf>) -> Result<()> {
 fn run(args: HankArgs) -> Result<()> {
     let config = Conf::load(args.config_path)?;
 
-    // Initialize Hank as a singleton.
-    let hank = Hank::from_config(config);
-    HANK.set(hank.into())
-        .unwrap_or_else(|_| panic!("Unable to initialize Hank"));
-
-    // Grab the global Hank Mutex.
-    let hank = Hank::global();
+    // Initialize Hank.
+    let mut hank = Hank::new(config);
 
     // Establish and use a websocket connection
     let (mut connection, _) = discord().connect().expect("Connect failed");
@@ -90,7 +80,7 @@ fn run(args: HankArgs) -> Result<()> {
                     payload: serde_json::to_string(&msg.clone()).unwrap(),
                 };
 
-                hank.lock().unwrap().dispatch(event);
+                hank.dispatch(event);
             }
             Ok(_) => {}
             Err(discord::Error::Closed(code, body)) => {

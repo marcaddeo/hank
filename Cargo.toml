@@ -6,6 +6,7 @@ edition = "2021"
 [workspace]
 members = [
 	"plugins/ping",
+	"plugins/pong",
 	"lib/hank-transport",
 ]
 

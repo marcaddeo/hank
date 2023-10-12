@@ -29,7 +29,7 @@ impl<'a> Plugin<'a> {
         }
     }
 
-    pub fn handle_event(&mut self, event: HankEvent) {
+    pub fn handle_event(&mut self, event: &HankEvent) {
         let res = self
             .plugin
             .call("handle_event", serde_json::to_string(&event).unwrap());
