@@ -2,52 +2,45 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use cli::{Cli, Commands, HankArgs};
 use conf::Conf;
-use discord::model::Event;
-use discord::Discord;
-use hank_transport::HankEvent;
+use hank_transport::{HankEvent, Message};
 use plugin::Plugin;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
-use tracing::*;
+use std::sync::Arc;
+use std::error::Error;
+use twilight_cache_inmemory::{InMemoryCache, ResourceType};
+use twilight_gateway::{Event, Intents, Shard, ShardId};
+use twilight_http::Client as HttpClient;
 
 mod cli;
 mod conf;
-mod functions;
 mod plugin;
 
-static DISCORD: OnceLock<Arc<Discord>> = OnceLock::new();
-fn discord() -> &'static Arc<Discord> {
-    DISCORD.get().expect("Discord has not been initialized")
-}
-
-pub struct Hank<'a> {
+#[derive(Clone)]
+pub struct Hank {
     pub config: Conf,
-    pub plugins: Vec<Plugin<'a>>,
+    pub plugins: Vec<Plugin>,
 }
 
-impl Hank<'_> {
-    pub fn new(config: Conf) -> Self {
+impl Hank {
+    pub async fn new(config: Conf) -> Self {
         let mut plugins: Vec<Plugin> = vec![];
 
         for path in config.clone().plugins {
-            plugins.push(Plugin::new(path));
+            plugins.push(Plugin::new(path).await);
         }
-
-        // Initialize the Discord global singleton.
-        let discord = Discord::from_bot_token(&config.discord_token).unwrap();
-        DISCORD
-            .set(Arc::new(discord))
-            .unwrap_or_else(|_| panic!("Unable to initialize Discord"));
 
         Self { config, plugins }
     }
 
-    pub fn dispatch(&mut self, event: HankEvent) {
-        for plugin in self.plugins.iter_mut() {
+    pub async fn dispatch(&self, event: HankEvent) -> Option<Message> {
+        for plugin in self.plugins.iter() {
             if plugin.subscribed_events.0.contains(&event.name) {
-                plugin.handle_event(&event);
+                // @TODO this only allows one plugin to handle an event, bad code.
+                return plugin.handle_event(&event).await;
             }
         }
+
+        None
     }
 }
 
@@ -63,32 +56,78 @@ fn init(config_path: Option<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn run(args: HankArgs) -> Result<()> {
+#[tokio::main]
+async fn run(args: HankArgs) -> Result<()> {
     let config = Conf::load(args.config_path)?;
 
+    let token = config.discord_token.clone();
+
     // Initialize Hank.
-    let mut hank = Hank::new(config);
+    let hank = Hank::new(config).await;
 
-    // Establish and use a websocket connection
-    let (mut connection, _) = discord().connect().expect("Connect failed");
-    info!("Ready.");
+    // Specify intents requesting events about things like new and updated
+    // messages in a guild and direct messages.
+    let intents = Intents::GUILD_MESSAGES | Intents::DIRECT_MESSAGES | Intents::MESSAGE_CONTENT;
+
+    // Create a single shard.
+    let mut shard = Shard::new(ShardId::ONE, token.clone(), intents);
+
+    // The http client is separate from the gateway, so startup a new
+    // one, also use Arc such that it can be cloned to other threads.
+    let http = Arc::new(HttpClient::new(token));
+
+    // Since we only care about messages, make the cache only process messages.
+    let cache = InMemoryCache::builder()
+        .resource_types(ResourceType::MESSAGE)
+        .build();
+
+    // Startup the event loop to process each event in the event stream as they
+    // come in.
     loop {
-        match connection.recv_event() {
-            Ok(Event::MessageCreate(msg)) => {
-                let event = HankEvent {
-                    name: "MessageCreate".into(),
-                    payload: serde_json::to_string(&msg.clone()).unwrap(),
-                };
+        let event = match shard.next_event().await {
+            Ok(event) => event,
+            Err(source) => {
+                tracing::warn!(?source, "error receiving event");
 
-                hank.dispatch(event);
+                if source.is_fatal() {
+                    break;
+                }
+
+                continue;
             }
-            Ok(_) => {}
-            Err(discord::Error::Closed(code, body)) => {
-                error!("Gateway closed on us with code {:?}: {}", code, body);
-                break;
+        };
+        // Update the cache.
+        cache.update(&event);
+
+        // Spawn a new task to handle the event
+        tokio::spawn(handle_event(hank.clone(), event, Arc::clone(&http)));
+    }
+
+    Ok(())
+}
+
+async fn handle_event(
+    hank: Hank,
+    event: Event,
+    http: Arc<HttpClient>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    match event {
+        Event::MessageCreate(msg) => {
+            let event = HankEvent {
+                name: "MessageCreate".into(),
+                payload: serde_json::to_string(&msg.clone()).unwrap(),
+            };
+
+            if let Some(msg) = hank.dispatch(event).await {
+                let channel = twilight_model::id::Id::new(msg.channel_id.parse().unwrap());
+                http.create_message(channel).content(&msg.content)?.await?;
             }
-            Err(err) => error!("Receive error: {:?}", err),
+
         }
+        Event::Ready(_) => {
+            println!("Shard is ready");
+        }
+        _ => {}
     }
 
     Ok(())

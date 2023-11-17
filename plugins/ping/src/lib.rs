@@ -1,13 +1,15 @@
 use extism_pdk::*;
 use hank_transport::{HankEvent, Message, SubscribedEvents};
+use serde::{Serialize, Deserialize};
 
-#[host_fn]
-extern "ExtismHost" {
-    pub fn send_message(data: Json<Message>);
+#[derive(Debug, Serialize, Deserialize)]
+enum PluginResult {
+    Init(SubscribedEvents),
+    HandleEventResult(Option<Message>),
 }
 
 #[plugin_fn]
-pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<()> {
+pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>> {
     if event.name == "MessageCreate" {
         let payload: Message = serde_json::from_str(&event.payload).unwrap();
 
@@ -17,18 +19,16 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<()> {
                 content: "Pong!".into(),
             };
 
-            unsafe {
-                let _ = send_message(Json(message));
-            }
+            return Ok(Json(PluginResult::HandleEventResult(Some(message))));
         }
     }
 
-    Ok(())
+    Ok(Json(PluginResult::HandleEventResult(None)))
 }
 
 #[plugin_fn]
-pub fn init(_: ()) -> FnResult<Json<SubscribedEvents>> {
-    Ok(Json(SubscribedEvents(vec!["MessageCreate".into()])))
+pub fn init(_: ()) -> FnResult<Json<PluginResult>> {
+    Ok(Json(PluginResult::Init(SubscribedEvents(vec!["MessageCreate".into()]))))
 }
 
 // #[cfg(test)]

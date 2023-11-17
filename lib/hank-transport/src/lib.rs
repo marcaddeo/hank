@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
-    pub channel_id: u64,
+    pub channel_id: String,
     pub content: String,
 }
 

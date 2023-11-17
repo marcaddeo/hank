@@ -1,44 +1,79 @@
-use crate::functions::send_message;
-use extism::{Function, ValType};
-use hank_transport::{HankEvent, SubscribedEvents};
+// use crate::functions::send_message;
+// use extism::{Function, ValType};
+use hank_transport::{HankEvent, SubscribedEvents, Message};
 use std::path::PathBuf;
-use tracing::error;
+use tokio::sync::{oneshot, mpsc};
+use serde::{Serialize, Deserialize};
+// use tracing::error;
 
-pub struct Plugin<'a> {
-    /// A list of events the plugin subscribes to.
-    pub subscribed_events: SubscribedEvents,
-
-    pub plugin: extism::Plugin<'a>,
+#[derive(Debug, Serialize, Deserialize)]
+enum PluginCommand {
+    Init,
+    HandleEvent(HankEvent),
 }
 
-impl<'a> Plugin<'a> {
-    pub fn new<T: Into<PathBuf>>(path: T) -> Self {
-        let f = Function::new("send_message", [ValType::I64], [], None, send_message);
+#[derive(Debug, Serialize, Deserialize)]
+enum PluginResult {
+    Init(SubscribedEvents),
+    HandleEventResult(Option<Message>),
+}
 
-        let manifest = extism::Manifest::new(vec![path.into()]);
-        let mut plugin = extism::Plugin::create_with_manifest(&manifest, [f], true).unwrap();
+#[derive(Clone, Debug)]
+pub struct Plugin {
+    /// A list of events the plugin subscribes to.
+    pub subscribed_events: SubscribedEvents,
+    plugin_tx: mpsc::Sender<(PluginCommand, oneshot::Sender<PluginResult>)>,
+}
+
+impl Plugin {
+    pub async fn new(path: PathBuf) -> Self {
+        let (plugin_tx, mut plugin_rx) = mpsc::channel::<(PluginCommand, oneshot::Sender<PluginResult>)>(32);
+
+        tokio::spawn(async move {
+            use PluginCommand::*;
+
+            let manifest = extism::Manifest::new(vec![path]);
+            let mut plugin = extism::Plugin::create_with_manifest(&manifest, [], true).unwrap();
+
+            while let Some((command, response)) = plugin_rx.recv().await {
+                let data = match command {
+                    Init => {
+                        plugin.call("init", "").unwrap()
+                    }
+                    HandleEvent(event) => {
+                        plugin.call("handle_event", serde_json::to_string(&event).unwrap()).unwrap()
+                    }
+                };
+
+                let data_str = String::from_utf8(data.to_vec()).unwrap();
+                let result: PluginResult = serde_json::from_str(&data_str).unwrap();
+
+                response.send(result).unwrap();
+            }
+        });
 
         // Call the plugins "init" function to get a list of subscribed events.
-        let output = plugin.call("init", "").unwrap();
-        let subscribed_events: SubscribedEvents =
-            serde_json::from_str(std::str::from_utf8(output).unwrap()).unwrap();
+        let PluginResult::Init(subscribed_events) = Self::call(plugin_tx.clone(), PluginCommand::Init).await else {
+            panic!("Init failed");
+        };
 
         Self {
             subscribed_events,
-            plugin,
+            plugin_tx,
         }
     }
 
-    pub fn handle_event(&mut self, event: &HankEvent) {
-        let res = self
-            .plugin
-            .call("handle_event", serde_json::to_string(&event).unwrap());
+    pub async fn handle_event(&self, event: &HankEvent) -> Option<Message> {
+        match Self::call(self.plugin_tx.clone(), PluginCommand::HandleEvent(event.clone())).await {
+            PluginResult::HandleEventResult(res) => return res,
+            _ => panic!("error"),
+        }
+    }
 
-        match res {
-            Ok(_) => (),
-            Err(e) => {
-                error!("{}", e);
-            }
-        };
+    async fn call(plugin_tx: mpsc::Sender<(PluginCommand, oneshot::Sender<PluginResult>)>, cmd: PluginCommand) -> PluginResult {
+        let (resp_tx, resp_rx) = oneshot::channel();
+
+        plugin_tx.send((cmd, resp_tx)).await.unwrap();
+        resp_rx.await.unwrap()
     }
 }
