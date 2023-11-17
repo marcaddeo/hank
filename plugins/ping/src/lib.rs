@@ -2,6 +2,11 @@ use extism_pdk::*;
 use hank_transport::{HankEvent, Message, SubscribedEvents};
 use serde::{Serialize, Deserialize};
 
+#[host_fn]
+extern "ExtismHost" {
+    pub fn send_message(data: Json<Message>);
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginResult {
     Init(SubscribedEvents),
@@ -28,6 +33,13 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>
 
 #[plugin_fn]
 pub fn init(_: ()) -> FnResult<Json<PluginResult>> {
+    unsafe {
+        let message = Message {
+            channel_id: "1046434727978078302".into(),
+            content: "Init!".into(),
+        };
+        let _ = send_message(Json(message));
+    }
     Ok(Json(PluginResult::Init(SubscribedEvents(vec!["MessageCreate".into()]))))
 }
 

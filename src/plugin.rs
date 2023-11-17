@@ -1,10 +1,9 @@
-// use crate::functions::send_message;
-// use extism::{Function, ValType};
+use extism::{Function, ValType};
 use hank_transport::{HankEvent, SubscribedEvents, Message};
 use std::path::PathBuf;
 use tokio::sync::{oneshot, mpsc};
+use crate::send_message;
 use serde::{Serialize, Deserialize};
-// use tracing::error;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginCommand {
@@ -32,8 +31,10 @@ impl Plugin {
         tokio::spawn(async move {
             use PluginCommand::*;
 
+            let f = Function::new("send_message", [ValType::I64], [], None, send_message);
+
             let manifest = extism::Manifest::new(vec![path]);
-            let mut plugin = extism::Plugin::create_with_manifest(&manifest, [], true).unwrap();
+            let mut plugin = extism::Plugin::create_with_manifest(&manifest, [f], true).unwrap();
 
             while let Some((command, response)) = plugin_rx.recv().await {
                 let data = match command {

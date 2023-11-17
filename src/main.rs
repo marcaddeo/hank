@@ -5,15 +5,43 @@ use conf::Conf;
 use hank_transport::{HankEvent, Message};
 use plugin::Plugin;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::error::Error;
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Intents, Shard, ShardId};
 use twilight_http::Client as HttpClient;
+use extism::InternalExt;
+use extism::{UserData, Val};
+use std::sync::{Arc, OnceLock};
 
 mod cli;
 mod conf;
 mod plugin;
+
+static DISCORD: OnceLock<Arc<HttpClient>> = OnceLock::new();
+fn discord() -> &'static Arc<HttpClient> {
+    DISCORD.get().expect("Discord has not been initialized")
+}
+
+pub fn send_message(
+    plugin: &mut extism::CurrentPlugin,
+    inputs: &[Val],
+    _outputs: &mut [Val],
+    _user_data: UserData,
+) -> Result<(), extism::Error> {
+    let message: String = plugin
+        .memory_read_str(inputs[0].i64().unwrap().try_into().unwrap())
+        .unwrap()
+        .to_string();
+    let message: Message = serde_json::from_str(&message).unwrap();
+    let channel = twilight_model::id::Id::new(message.channel_id.parse().unwrap());
+
+    let handle = tokio::runtime::Handle::current();
+    handle.spawn(async move {
+        discord().create_message(channel).content(&message.content).unwrap().await
+    });
+
+    Ok(())
+}
 
 #[derive(Clone)]
 pub struct Hank {
@@ -62,9 +90,6 @@ async fn run(args: HankArgs) -> Result<()> {
 
     let token = config.discord_token.clone();
 
-    // Initialize Hank.
-    let hank = Hank::new(config).await;
-
     // Specify intents requesting events about things like new and updated
     // messages in a guild and direct messages.
     let intents = Intents::GUILD_MESSAGES | Intents::DIRECT_MESSAGES | Intents::MESSAGE_CONTENT;
@@ -75,6 +100,12 @@ async fn run(args: HankArgs) -> Result<()> {
     // The http client is separate from the gateway, so startup a new
     // one, also use Arc such that it can be cloned to other threads.
     let http = Arc::new(HttpClient::new(token));
+    DISCORD
+        .set(http.clone())
+        .unwrap_or_else(|_| panic!("Unable to initialize Discord singleton."));
+
+    // Initialize Hank.
+    let hank = Hank::new(config).await;
 
     // Since we only care about messages, make the cache only process messages.
     let cache = InMemoryCache::builder()
