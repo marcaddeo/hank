@@ -1,21 +1,21 @@
+use crate::hank::Hank;
 use anyhow::{bail, Result};
 use clap::Parser;
 use cli::{Cli, Commands, HankArgs};
 use conf::Conf;
 use hank_transport::HankEvent;
-use std::path::PathBuf;
 use std::error::Error;
+use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Intents, Shard, ShardId};
 use twilight_http::Client as HttpClient;
-use std::sync::{Arc, OnceLock};
-use crate::hank::Hank;
 
 mod cli;
-mod hank;
 mod conf;
-mod plugin;
 mod functions;
+mod hank;
+mod plugin;
 
 static DISCORD: OnceLock<Arc<HttpClient>> = OnceLock::new();
 fn discord() -> &'static Arc<HttpClient> {
@@ -103,7 +103,6 @@ async fn handle_event(
                 let channel = twilight_model::id::Id::new(msg.channel_id.parse().unwrap());
                 http.create_message(channel).content(&msg.content)?.await?;
             }
-
         }
         Event::Ready(_) => {
             println!("Shard is ready");

@@ -1,7 +1,7 @@
 use crate::conf::Conf;
 use crate::plugin::Plugin;
-use hank_transport::Message;
 use hank_transport::HankEvent;
+use hank_transport::Message;
 
 #[derive(Clone)]
 pub struct Hank {
@@ -31,4 +31,3 @@ impl Hank {
         None
     }
 }
-

@@ -1,6 +1,6 @@
 use extism_pdk::*;
 use hank_transport::{HankEvent, Message, SubscribedEvents};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginResult {
@@ -28,7 +28,9 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>
 
 #[plugin_fn]
 pub fn init(_: ()) -> FnResult<Json<PluginResult>> {
-    Ok(Json(PluginResult::Init(SubscribedEvents(vec!["MessageCreate".into()]))))
+    Ok(Json(PluginResult::Init(SubscribedEvents(vec![
+        "MessageCreate".into(),
+    ]))))
 }
 
 // #[cfg(test)]

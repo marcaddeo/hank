@@ -1,7 +1,7 @@
 use crate::discord;
-use hank_transport::Message;
 use extism::InternalExt;
 use extism::{UserData, Val};
+use hank_transport::Message;
 
 pub fn send_message(
     plugin: &mut extism::CurrentPlugin,
@@ -18,7 +18,11 @@ pub fn send_message(
 
     let handle = tokio::runtime::Handle::current();
     handle.spawn(async move {
-        discord().create_message(channel).content(&message.content).unwrap().await
+        discord()
+            .create_message(channel)
+            .content(&message.content)
+            .unwrap()
+            .await
     });
 
     Ok(())

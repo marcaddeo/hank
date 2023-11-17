@@ -1,6 +1,6 @@
 use extism_pdk::*;
 use hank_transport::{HankEvent, Message, SubscribedEvents};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[host_fn]
 extern "ExtismHost" {
@@ -40,7 +40,9 @@ pub fn init(_: ()) -> FnResult<Json<PluginResult>> {
         };
         let _ = send_message(Json(message));
     }
-    Ok(Json(PluginResult::Init(SubscribedEvents(vec!["MessageCreate".into()]))))
+    Ok(Json(PluginResult::Init(SubscribedEvents(vec![
+        "MessageCreate".into(),
+    ]))))
 }
 
 // #[cfg(test)]
