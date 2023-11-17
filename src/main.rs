@@ -81,17 +81,13 @@ async fn run(args: HankArgs) -> Result<()> {
         cache.update(&event);
 
         // Spawn a new task to handle the event
-        tokio::spawn(handle_event(hank.clone(), event, Arc::clone(&http)));
+        tokio::spawn(handle_event(hank.clone(), event));
     }
 
     Ok(())
 }
 
-async fn handle_event(
-    hank: Hank,
-    event: Event,
-    http: Arc<HttpClient>,
-) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn handle_event(hank: Hank, event: Event) -> Result<(), Box<dyn Error + Send + Sync>> {
     match event {
         Event::MessageCreate(msg) => {
             let event = HankEvent {
@@ -99,10 +95,7 @@ async fn handle_event(
                 payload: serde_json::to_string(&msg.clone()).unwrap(),
             };
 
-            if let Some(msg) = hank.dispatch(event).await {
-                let channel = twilight_model::id::Id::new(msg.channel_id.parse().unwrap());
-                http.create_message(channel).content(&msg.content)?.await?;
-            }
+            hank.dispatch(event).await;
         }
         Event::Ready(_) => {
             println!("Shard is ready");

@@ -10,7 +10,22 @@ extern "ExtismHost" {
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginResult {
     Init(SubscribedEvents),
-    HandleEventResult(Option<Message>),
+    HandleEventResult,
+}
+
+pub fn fibonacci_reccursive(n: i32) -> u64 {
+    if n < 0 {
+        panic!("{} is negative!", n);
+    }
+    match n {
+        0 => panic!("zero is not a right argument to fibonacci_reccursive()!"),
+        1 | 2 => 1,
+        3 => 2,
+        /*
+        50    => 12586269025,
+        */
+        _ => fibonacci_reccursive(n - 1) + fibonacci_reccursive(n - 2),
+    }
 }
 
 #[plugin_fn]
@@ -23,23 +38,20 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>
                 channel_id: payload.channel_id,
                 content: "Pong!".into(),
             };
-
-            return Ok(Json(PluginResult::HandleEventResult(Some(message))));
+            info!("Calculating fib to 44");
+            let fib = fibonacci_reccursive(44);
+            info!("done: {}", fib);
+            unsafe {
+                let _ = send_message(Json(message));
+            }
         }
     }
 
-    Ok(Json(PluginResult::HandleEventResult(None)))
+    Ok(Json(PluginResult::HandleEventResult))
 }
 
 #[plugin_fn]
 pub fn init(_: ()) -> FnResult<Json<PluginResult>> {
-    unsafe {
-        let message = Message {
-            channel_id: "1046434727978078302".into(),
-            content: "Init!".into(),
-        };
-        let _ = send_message(Json(message));
-    }
     Ok(Json(PluginResult::Init(SubscribedEvents(vec![
         "MessageCreate".into(),
     ]))))

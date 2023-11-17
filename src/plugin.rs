@@ -1,6 +1,6 @@
 use crate::functions::send_message;
 use extism::{Function, ValType};
-use hank_transport::{HankEvent, Message, SubscribedEvents};
+use hank_transport::{HankEvent, SubscribedEvents};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::sync::{mpsc, oneshot};
@@ -14,7 +14,7 @@ enum PluginCommand {
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginResult {
     Init(SubscribedEvents),
-    HandleEventResult(Option<Message>),
+    HandleEventResult,
 }
 
 #[derive(Clone, Debug)]
@@ -65,16 +65,12 @@ impl Plugin {
         }
     }
 
-    pub async fn handle_event(&self, event: &HankEvent) -> Option<Message> {
-        match Self::call(
+    pub async fn handle_event(&self, event: &HankEvent) {
+        Self::call(
             self.plugin_tx.clone(),
             PluginCommand::HandleEvent(event.clone()),
         )
-        .await
-        {
-            PluginResult::HandleEventResult(res) => res,
-            _ => panic!("error"),
-        }
+        .await;
     }
 
     async fn call(

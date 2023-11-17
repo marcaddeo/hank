@@ -2,10 +2,15 @@ use extism_pdk::*;
 use hank_transport::{HankEvent, Message, SubscribedEvents};
 use serde::{Deserialize, Serialize};
 
+#[host_fn]
+extern "ExtismHost" {
+    pub fn send_message(data: Json<Message>);
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginResult {
     Init(SubscribedEvents),
-    HandleEventResult(Option<Message>),
+    HandleEventResult,
 }
 
 #[plugin_fn]
@@ -18,12 +23,14 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>
                 channel_id: payload.channel_id,
                 content: "Ping!".into(),
             };
-
-            return Ok(Json(PluginResult::HandleEventResult(Some(message))));
+            info!("Not sleeping, just sending my message... yo.");
+            unsafe {
+                let _ = send_message(Json(message));
+            }
         }
     }
 
-    Ok(Json(PluginResult::HandleEventResult(None)))
+    Ok(Json(PluginResult::HandleEventResult))
 }
 
 #[plugin_fn]

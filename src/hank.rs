@@ -1,7 +1,6 @@
 use crate::conf::Conf;
 use crate::plugin::Plugin;
 use hank_transport::HankEvent;
-use hank_transport::Message;
 
 #[derive(Clone)]
 pub struct Hank {
@@ -20,14 +19,11 @@ impl Hank {
         Self { config, plugins }
     }
 
-    pub async fn dispatch(&self, event: HankEvent) -> Option<Message> {
+    pub async fn dispatch(&self, event: HankEvent) {
         for plugin in self.plugins.iter() {
             if plugin.subscribed_events.0.contains(&event.name) {
-                // @TODO this only allows one plugin to handle an event, bad code.
-                return plugin.handle_event(&event).await;
+                plugin.handle_event(&event).await;
             }
         }
-
-        None
     }
 }
