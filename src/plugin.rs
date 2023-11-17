@@ -72,7 +72,7 @@ impl Plugin {
         )
         .await
         {
-            PluginResult::HandleEventResult(res) => return res,
+            PluginResult::HandleEventResult(res) => res,
             _ => panic!("error"),
         }
     }
