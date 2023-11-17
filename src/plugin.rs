@@ -2,7 +2,7 @@ use extism::{Function, ValType};
 use hank_transport::{HankEvent, SubscribedEvents, Message};
 use std::path::PathBuf;
 use tokio::sync::{oneshot, mpsc};
-use crate::send_message;
+use crate::functions::send_message;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
