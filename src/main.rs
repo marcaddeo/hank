@@ -2,16 +2,17 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use cli::{Cli, Commands, HankArgs};
 use conf::Conf;
-use hank_transport::{HankEvent, Message};
-use plugin::Plugin;
+use hank_transport::HankEvent;
 use std::path::PathBuf;
 use std::error::Error;
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Intents, Shard, ShardId};
 use twilight_http::Client as HttpClient;
 use std::sync::{Arc, OnceLock};
+use crate::hank::Hank;
 
 mod cli;
+mod hank;
 mod conf;
 mod plugin;
 mod functions;
@@ -19,35 +20,6 @@ mod functions;
 static DISCORD: OnceLock<Arc<HttpClient>> = OnceLock::new();
 fn discord() -> &'static Arc<HttpClient> {
     DISCORD.get().expect("Discord has not been initialized")
-}
-
-#[derive(Clone)]
-pub struct Hank {
-    pub config: Conf,
-    pub plugins: Vec<Plugin>,
-}
-
-impl Hank {
-    pub async fn new(config: Conf) -> Self {
-        let mut plugins: Vec<Plugin> = vec![];
-
-        for path in config.clone().plugins {
-            plugins.push(Plugin::new(path).await);
-        }
-
-        Self { config, plugins }
-    }
-
-    pub async fn dispatch(&self, event: HankEvent) -> Option<Message> {
-        for plugin in self.plugins.iter() {
-            if plugin.subscribed_events.0.contains(&event.name) {
-                // @TODO this only allows one plugin to handle an event, bad code.
-                return plugin.handle_event(&event).await;
-            }
-        }
-
-        None
-    }
 }
 
 fn init(config_path: Option<PathBuf>) -> Result<()> {
