@@ -14,17 +14,13 @@ members = [
 anyhow = "1.0.75"
 clap = { version = "4.4.6", features = ["derive"] }
 confique = "0.2.4"
-discord = { git = "https://github.com/SpaceManiac/discord-rs", version = "0.9.0" }
 extism = "0.5.2"
-extism-convert = "0.2.0"
-extism-pdk = "0.3.4"
 map-macro = "0.2.6"
 serde = "1.0.188"
 serde_json = "1.0.107"
 tokio = { version = "1.34.0", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-twilight-cache = "0.0.0"
 twilight-cache-inmemory = "0.15.4"
 twilight-gateway = "0.15.4"
 twilight-http = "0.15.4"
