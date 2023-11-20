@@ -108,7 +108,9 @@ async fn handle_event(hank: Hank, event: Event) -> Result<(), Box<dyn Error + Se
 
 fn main() -> Result<()> {
     // Initialize the tracing subscriber.
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt::fmt()
+        // .with_env_filter("")
+        .init();
 
     let cli = Cli::parse();
 
