@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[host_fn]
 extern "ExtismHost" {
-    pub fn send_message(data: Json<Message>);
+    pub fn send_message(message: Json<Message>);
 }
 
 #[derive(Debug, Serialize, Deserialize)]

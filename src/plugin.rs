@@ -1,9 +1,11 @@
-use crate::functions::send_message;
-use extism::{Function, ValType};
+use crate::discord;
+use hank_transport::Message;
+use extism::{host_fn, ValType, UserData};
 use hank_transport::{HankEvent, SubscribedEvents};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::sync::{mpsc, oneshot};
+use twilight_model::id::Id;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum PluginCommand {
@@ -24,6 +26,18 @@ pub struct Plugin {
     plugin_tx: mpsc::Sender<(PluginCommand, oneshot::Sender<PluginResult>)>,
 }
 
+host_fn!(send_message(message: Message) {
+    let handle = tokio::runtime::Handle::current();
+    handle.spawn(async move {
+        discord()
+            .create_message(Id::new(message.channel_id.parse().unwrap()))
+            .content(&message.content)
+            .unwrap()
+            .await
+    });
+    Ok(())
+});
+
 impl Plugin {
     pub async fn new(path: PathBuf) -> Self {
         let (plugin_tx, mut plugin_rx) =
@@ -32,13 +46,21 @@ impl Plugin {
         tokio::spawn(async move {
             use PluginCommand::*;
 
-            let f = Function::new("send_message", [ValType::I64], [], None, send_message);
-
             let manifest = extism::Manifest::new(vec![path]);
-            let mut plugin = extism::Plugin::create_with_manifest(&manifest, [f], true).unwrap();
+            let mut plugin = extism::PluginBuilder::new(manifest)
+                .with_wasi(true)
+                .with_function(
+                    "send_message",
+                    [ValType::I64],
+                    [],
+                    UserData::default(),
+                    send_message,
+                )
+                .build()
+                .unwrap();
 
             while let Some((command, response)) = plugin_rx.recv().await {
-                let data = match command {
+                let data: &[u8] = match command {
                     Init => plugin.call("init", "").unwrap(),
                     HandleEvent(event) => plugin
                         .call("handle_event", serde_json::to_string(&event).unwrap())

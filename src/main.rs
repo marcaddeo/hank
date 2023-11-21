@@ -13,7 +13,6 @@ use twilight_http::Client as HttpClient;
 
 mod cli;
 mod conf;
-mod functions;
 mod hank;
 mod plugin;
 
