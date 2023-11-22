@@ -8,6 +8,7 @@ members = [
 	"lib/hank-transport",
 	"plugin/ping",
 	"plugin/pong",
+	"plugin/wordle",
 ]
 
 [dependencies]

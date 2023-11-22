@@ -3586,6 +3586,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wordle"
+version = "0.1.0"
+dependencies = [
+ "extism-pdk",
+ "hank-transport",
+ "map-macro",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xdg"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
