@@ -1,3 +1,5 @@
 /lib/*/target
 /plugins/*/target
 /target
+/db/*
+!/db/.gitkeep
