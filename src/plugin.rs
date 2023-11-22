@@ -87,10 +87,10 @@ impl Plugin {
         }
     }
 
-    pub async fn handle_event(&self, event: &HankEvent) {
+    pub async fn handle_event(&self, event: HankEvent) {
         Self::call(
             self.plugin_tx.clone(),
-            PluginCommand::HandleEvent(event.clone()),
+            PluginCommand::HandleEvent(event),
         )
         .await;
     }

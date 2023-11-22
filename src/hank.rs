@@ -19,11 +19,15 @@ impl Hank {
         Self { config, plugins }
     }
 
-    pub async fn dispatch(&self, event: HankEvent) {
+    pub async fn dispatch(&'static self, event: &HankEvent) {
+        let mut set = tokio::task::JoinSet::new();
+
         for plugin in self.plugins.iter() {
             if plugin.subscribed_events.0.contains(&event.name) {
-                plugin.handle_event(&event).await;
+                set.spawn(plugin.handle_event(event.clone()));
             }
         }
+
+        while let Some(_) = set.join_next().await { }
     }
 }

@@ -10,6 +10,7 @@ use std::sync::{Arc, OnceLock};
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Intents, Shard, ShardId};
 use twilight_http::Client as HttpClient;
+use tracing::info;
 
 mod cli;
 mod conf;
@@ -19,6 +20,11 @@ mod plugin;
 static DISCORD: OnceLock<Arc<HttpClient>> = OnceLock::new();
 fn discord() -> &'static Arc<HttpClient> {
     DISCORD.get().expect("Discord has not been initialized")
+}
+
+static HANK: OnceLock<Hank> = OnceLock::new();
+fn hank() -> &'static Hank {
+    HANK.get().expect("Hank has not been initialized")
 }
 
 fn init(config_path: Option<PathBuf>) -> Result<()> {
@@ -55,6 +61,9 @@ async fn run(args: HankArgs) -> Result<()> {
 
     // Initialize Hank.
     let hank = Hank::new(config).await;
+    HANK
+        .set(hank)
+        .unwrap_or_else(|_| panic!("Unable to initialize Hank singleton."));
 
     // Since we only care about messages, make the cache only process messages.
     let cache = InMemoryCache::builder()
@@ -80,13 +89,13 @@ async fn run(args: HankArgs) -> Result<()> {
         cache.update(&event);
 
         // Spawn a new task to handle the event
-        tokio::spawn(handle_event(hank.clone(), event));
+        tokio::spawn(handle_event(event));
     }
 
     Ok(())
 }
 
-async fn handle_event(hank: Hank, event: Event) -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn handle_event(event: Event) -> Result<(), Box<dyn Error + Send + Sync>> {
     match event {
         Event::MessageCreate(msg) => {
             let event = HankEvent {
@@ -94,10 +103,10 @@ async fn handle_event(hank: Hank, event: Event) -> Result<(), Box<dyn Error + Se
                 payload: serde_json::to_string(&msg.clone()).unwrap(),
             };
 
-            hank.dispatch(event).await;
+            hank().dispatch(&event).await;
         }
         Event::Ready(_) => {
-            println!("Shard is ready");
+            info!("Shard is ready");
         }
         _ => {}
     }
