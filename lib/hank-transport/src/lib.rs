@@ -1,5 +1,5 @@
+use extism_convert::{FromBytesOwned, ToBytes};
 use serde::{Deserialize, Serialize};
-use extism_convert::{ToBytes, FromBytesOwned};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Message {

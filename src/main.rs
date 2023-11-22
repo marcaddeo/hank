@@ -7,10 +7,10 @@ use hank_transport::HankEvent;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use tracing::info;
 use twilight_cache_inmemory::{InMemoryCache, ResourceType};
 use twilight_gateway::{Event, Intents, Shard, ShardId};
 use twilight_http::Client as HttpClient;
-use tracing::info;
 
 mod cli;
 mod conf;
@@ -61,8 +61,7 @@ async fn run(args: HankArgs) -> Result<()> {
 
     // Initialize Hank.
     let hank = Hank::new(config).await;
-    HANK
-        .set(hank)
+    HANK.set(hank)
         .unwrap_or_else(|_| panic!("Unable to initialize Hank singleton."));
 
     // Since we only care about messages, make the cache only process messages.

@@ -1,6 +1,6 @@
 use crate::discord;
+use extism::{host_fn, UserData, ValType};
 use hank_transport::Message;
-use extism::{host_fn, ValType, UserData};
 use hank_transport::{HankEvent, SubscribedEvents};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -88,11 +88,7 @@ impl Plugin {
     }
 
     pub async fn handle_event(&self, event: HankEvent) {
-        Self::call(
-            self.plugin_tx.clone(),
-            PluginCommand::HandleEvent(event),
-        )
-        .await;
+        Self::call(self.plugin_tx.clone(), PluginCommand::HandleEvent(event)).await;
     }
 
     async fn call(
