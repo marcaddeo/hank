@@ -28,6 +28,6 @@ impl Hank {
             }
         }
 
-        while let Some(_) = set.join_next().await {}
+        while (set.join_next().await).is_some() {}
     }
 }
