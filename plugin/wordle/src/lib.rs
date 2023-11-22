@@ -2,6 +2,8 @@ use extism_pdk::*;
 use hank_transport::{HankEvent, Message, SubscribedEvents};
 use serde::{Deserialize, Serialize};
 
+mod wordle;
+
 #[host_fn]
 extern "ExtismHost" {
     pub fn send_message(message: Json<Message>);
@@ -18,14 +20,16 @@ pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>
     if event.name == "MessageCreate" {
         let payload: Message = serde_json::from_str(&event.payload).unwrap();
 
-        if payload.content == "!wordle" {
-            let message = Message {
-                channel_id: payload.channel_id,
-                content: "Wordle!".into(),
-            };
-            unsafe {
-                let _ = send_message(Json(message));
-            }
+        let Ok(puzzle) = wordle::Puzzle::try_from(payload.content.clone()) else {
+            return Ok(Json(PluginResult::HandleEventResult));
+        };
+
+        let message = Message {
+            channel_id: payload.channel_id,
+            content: format!("{:?}", puzzle),
+        };
+        unsafe {
+            let _ = send_message(Json(message));
         }
     }
 
