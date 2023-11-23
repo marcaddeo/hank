@@ -1,43 +1,33 @@
 use extism_pdk::*;
-use hank_transport::{HankEvent, Message, SubscribedEvents};
-use serde::{Deserialize, Serialize};
+use hank_transport::{Message, PluginMetadata, PluginResult, Version};
 
 #[host_fn]
 extern "ExtismHost" {
     pub fn send_message(message: Json<Message>);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-enum PluginResult {
-    Init(SubscribedEvents),
-    HandleEventResult,
+#[plugin_fn]
+pub fn get_metadata() -> FnResult<Json<PluginResult>> {
+    let metadata = PluginMetadata::new(
+        "pong",
+        "A simple plugin that just responds with Ping! when you type !pong",
+        Version::new(0, 1, 0),
+        true,
+    );
+
+    Ok(Json(PluginResult::GetMetadata(metadata)))
 }
 
 #[plugin_fn]
-pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>> {
-    if event.name == "MessageCreate" {
-        let payload: Message = serde_json::from_str(&event.payload).unwrap();
-
-        if payload.content == "!pong" {
-            let message = Message {
-                channel_id: payload.channel_id,
-                content: "Ping!".into(),
-            };
-            info!("Not sleeping, just sending my message... yo.");
-            unsafe {
-                let _ = send_message(Json(message));
-            }
+pub fn handle_message(Json(message): Json<Message>) -> FnResult<Json<PluginResult>> {
+    if message.content == "!pong" {
+        let response = message.response("Ping!");
+        unsafe {
+            let _ = send_message(Json(response));
         }
     }
 
-    Ok(Json(PluginResult::HandleEventResult))
-}
-
-#[plugin_fn]
-pub fn init() -> FnResult<Json<PluginResult>> {
-    Ok(Json(PluginResult::Init(SubscribedEvents(vec![
-        "MessageCreate".into(),
-    ]))))
+    Ok(Json(PluginResult::None))
 }
 
 // #[cfg(test)]

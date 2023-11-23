@@ -1,10 +1,21 @@
 use extism_convert::{FromBytesOwned, ToBytes};
 use serde::{Deserialize, Serialize};
 
+pub use semver::Version;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Message {
     pub channel_id: String,
     pub content: String,
+}
+
+impl Message {
+    pub fn response(self, content: &str) -> Self {
+        Self {
+            channel_id: self.channel_id,
+            content: content.to_string(),
+        }
+    }
 }
 
 impl FromBytesOwned for Message {
@@ -23,13 +34,66 @@ impl ToBytes<'_> for Message {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HankEvent {
-    pub name: String,
-    pub payload: String,
+pub struct PluginMetadata {
+    /// The name of the plugin.
+    name: String,
+
+    /// A short description of the plugins functionality.
+    description: String,
+
+    /// The version of the plugin.
+    version: semver::Version,
+
+    /// Whether or not the plugin needs a database. If true, a database is created using the plugin
+    /// name as the database name.
+    database: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SubscribedEvents(pub Vec<String>);
+impl PluginMetadata {
+    pub fn new(name: &str, description: &str, version: semver::Version, database: bool) -> Self {
+        PluginMetadata {
+            name: name.to_string(),
+            description: description.to_string(),
+            version,
+            database,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PluginCommand {
+    GetMetadata,
+    HandleMessage(Message),
+}
+
+impl std::fmt::Display for PluginCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use PluginCommand::*;
+
+        let command = match self {
+            GetMetadata => "get_metadata",
+            HandleMessage(_) => "handle_message",
+        };
+
+        write!(f, "{}", command)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PluginResult {
+    None,
+    FunctionNotFound,
+    GetMetadata(PluginMetadata),
+}
+
+impl PluginResult {
+    pub fn is_none(self) -> bool {
+        match self {
+            PluginResult::None => true,
+            _ => false,
+        }
+    }
+}
 
 // #[cfg(test)]
 // mod tests {

@@ -1,6 +1,7 @@
 use crate::conf::Conf;
 use crate::plugin::Plugin;
-use hank_transport::HankEvent;
+use hank_transport::{Message, PluginCommand};
+use tokio::task::JoinSet;
 
 #[derive(Clone)]
 pub struct Hank {
@@ -19,13 +20,16 @@ impl Hank {
         Self { config, plugins }
     }
 
-    pub async fn dispatch(&'static self, event: &HankEvent) {
-        let mut set = tokio::task::JoinSet::new();
+    pub async fn handle_message(&'static self, message: &Message) {
+        self.send_command(PluginCommand::HandleMessage(message.clone()))
+            .await;
+    }
+
+    async fn send_command(&'static self, command: PluginCommand) {
+        let mut set = JoinSet::new();
 
         for plugin in self.plugins.iter() {
-            if plugin.subscribed_events.0.contains(&event.name) {
-                set.spawn(plugin.handle_event(event.clone()));
-            }
+            set.spawn(plugin.send_command(command.clone()));
         }
 
         while (set.join_next().await).is_some() {}

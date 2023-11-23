@@ -3,7 +3,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use cli::{Cli, Commands, HankArgs};
 use conf::Conf;
-use hank_transport::HankEvent;
+use hank_transport::Message;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -97,12 +97,12 @@ async fn run(args: HankArgs) -> Result<()> {
 async fn handle_event(event: Event) -> Result<(), Box<dyn Error + Send + Sync>> {
     match event {
         Event::MessageCreate(msg) => {
-            let event = HankEvent {
-                name: "MessageCreate".into(),
-                payload: serde_json::to_string(&msg.clone()).unwrap(),
+            let message = Message {
+                channel_id: msg.channel_id.to_string(),
+                content: msg.content.clone(),
             };
 
-            hank().dispatch(&event).await;
+            hank().handle_message(&message).await;
         }
         Event::Ready(_) => {
             info!("Shard is ready");

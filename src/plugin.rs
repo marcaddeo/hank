@@ -1,28 +1,15 @@
 use crate::discord;
 use extism::{host_fn, UserData, ValType};
-use hank_transport::Message;
-use hank_transport::{HankEvent, SubscribedEvents};
-use serde::{Deserialize, Serialize};
+use hank_transport::{Message, PluginCommand, PluginMetadata, PluginResult};
 use std::path::PathBuf;
 use tokio::sync::{mpsc, oneshot};
 use twilight_model::id::Id;
 
-#[derive(Debug, Serialize, Deserialize)]
-enum PluginCommand {
-    Init,
-    HandleEvent(HankEvent),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-enum PluginResult {
-    Init(SubscribedEvents),
-    HandleEventResult,
-}
-
 #[derive(Clone, Debug)]
 pub struct Plugin {
-    /// A list of events the plugin subscribes to.
-    pub subscribed_events: SubscribedEvents,
+    /// The plugins metadata.
+    pub metadata: PluginMetadata,
+
     plugin_tx: mpsc::Sender<(PluginCommand, oneshot::Sender<PluginResult>)>,
 }
 
@@ -44,8 +31,6 @@ impl Plugin {
             mpsc::channel::<(PluginCommand, oneshot::Sender<PluginResult>)>(32);
 
         tokio::spawn(async move {
-            use PluginCommand::*;
-
             let manifest = extism::Manifest::new(vec![path]);
             let mut plugin = extism::PluginBuilder::new(manifest)
                 .with_wasi(true)
@@ -60,44 +45,46 @@ impl Plugin {
                 .unwrap();
 
             while let Some((command, response)) = plugin_rx.recv().await {
-                let data: &[u8] = match command {
-                    Init => plugin.call("init", "").unwrap(),
-                    HandleEvent(event) => plugin
-                        .call("handle_event", serde_json::to_string(&event).unwrap())
-                        .unwrap(),
-                };
+                use PluginCommand::*;
 
-                let data_str = String::from_utf8(data.to_vec()).unwrap();
-                let result: PluginResult = serde_json::from_str(&data_str).unwrap();
+                let result = if !plugin.function_exists(command.to_string()) {
+                    PluginResult::FunctionNotFound
+                } else {
+                    let data: &[u8] = match command {
+                        GetMetadata => plugin.call("get_metadata", "").unwrap(),
+                        HandleMessage(message) => plugin
+                            .call("handle_message", serde_json::to_string(&message).unwrap())
+                            .unwrap(),
+                    };
+
+                    let data_str = String::from_utf8(data.to_vec()).unwrap();
+                    serde_json::from_str::<PluginResult>(&data_str).unwrap()
+                };
 
                 response.send(result).unwrap();
             }
         });
 
-        // Call the plugins "init" function to get a list of subscribed events.
-        let PluginResult::Init(subscribed_events) =
-            Self::call(plugin_tx.clone(), PluginCommand::Init).await
-        else {
-            panic!("Init failed");
+        // Get the plugins metadata.
+        let (resp_tx, resp_rx) = oneshot::channel();
+        plugin_tx
+            .send((PluginCommand::GetMetadata, resp_tx))
+            .await
+            .unwrap();
+        let PluginResult::GetMetadata(metadata) = resp_rx.await.unwrap() else {
+            panic!("Could not get plugin metadata");
         };
 
         Self {
-            subscribed_events,
+            metadata,
             plugin_tx,
         }
     }
 
-    pub async fn handle_event(&self, event: HankEvent) {
-        Self::call(self.plugin_tx.clone(), PluginCommand::HandleEvent(event)).await;
-    }
-
-    async fn call(
-        plugin_tx: mpsc::Sender<(PluginCommand, oneshot::Sender<PluginResult>)>,
-        cmd: PluginCommand,
-    ) -> PluginResult {
+    pub async fn send_command(&self, cmd: PluginCommand) -> PluginResult {
         let (resp_tx, resp_rx) = oneshot::channel();
 
-        plugin_tx.send((cmd, resp_tx)).await.unwrap();
+        self.plugin_tx.send((cmd, resp_tx)).await.unwrap();
         resp_rx.await.unwrap()
     }
 }

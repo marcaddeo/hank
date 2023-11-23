@@ -1634,6 +1634,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "extism-convert 0.2.0 (git+https://github.com/extism/extism/)",
+ "semver",
  "serde",
  "serde_json",
 ]
@@ -2607,7 +2608,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "065717a5dfaca4a83d2fe57db3487b311365200000551d7a364e715dbf4346bc"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn 2.0.38",
@@ -3234,9 +3235,12 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.19"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad977052201c6de01a8ef2aa3378c4bd23217a056337d1d6da40468d267a4fb0"
+checksum = "836fa6a3e1e547f9a2c4040802ec865b5d85f4014efe00555d7090a3dcaa1090"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "serde"

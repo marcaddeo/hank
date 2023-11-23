@@ -1,6 +1,6 @@
 use extism_pdk::*;
-use hank_transport::{HankEvent, Message, SubscribedEvents};
-use serde::{Deserialize, Serialize};
+use hank_transport::{Message, PluginMetadata, PluginResult, Version};
+use wordle::Puzzle;
 
 mod wordle;
 
@@ -9,38 +9,30 @@ extern "ExtismHost" {
     pub fn send_message(message: Json<Message>);
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-enum PluginResult {
-    Init(SubscribedEvents),
-    HandleEventResult,
+#[plugin_fn]
+pub fn get_metadata() -> FnResult<Json<PluginResult>> {
+    let metadata = PluginMetadata::new(
+        "wordle",
+        "A wordle plugin to record daily Wordle puzzles.",
+        Version::new(0, 1, 0),
+        true,
+    );
+
+    Ok(Json(PluginResult::GetMetadata(metadata)))
 }
 
 #[plugin_fn]
-pub fn handle_event(Json(event): Json<HankEvent>) -> FnResult<Json<PluginResult>> {
-    if event.name == "MessageCreate" {
-        let payload: Message = serde_json::from_str(&event.payload).unwrap();
+pub fn handle_message(Json(message): Json<Message>) -> FnResult<Json<PluginResult>> {
+    let Ok(puzzle) = Puzzle::try_from(message.content.clone()) else {
+        return Ok(Json(PluginResult::None));
+    };
 
-        let Ok(puzzle) = wordle::Puzzle::try_from(payload.content.clone()) else {
-            return Ok(Json(PluginResult::HandleEventResult));
-        };
-
-        let message = Message {
-            channel_id: payload.channel_id,
-            content: format!("{:?}", puzzle),
-        };
-        unsafe {
-            let _ = send_message(Json(message));
-        }
+    let response = message.response(&format!("{:?}", puzzle));
+    unsafe {
+        let _ = send_message(Json(response));
     }
 
-    Ok(Json(PluginResult::HandleEventResult))
-}
-
-#[plugin_fn]
-pub fn init() -> FnResult<Json<PluginResult>> {
-    Ok(Json(PluginResult::Init(SubscribedEvents(vec![
-        "MessageCreate".into(),
-    ]))))
+    Ok(Json(PluginResult::None))
 }
 
 // #[cfg(test)]
