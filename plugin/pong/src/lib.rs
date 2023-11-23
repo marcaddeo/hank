@@ -12,7 +12,7 @@ pub fn get_metadata() -> FnResult<Json<PluginResult>> {
         "pong",
         "A simple plugin that just responds with Ping! when you type !pong",
         Version::new(0, 1, 0),
-        true,
+        false,
     );
 
     Ok(Json(PluginResult::GetMetadata(metadata)))
