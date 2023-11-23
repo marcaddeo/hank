@@ -36,17 +36,17 @@ impl ToBytes<'_> for Message {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PluginMetadata {
     /// The name of the plugin.
-    name: String,
+    pub name: String,
 
     /// A short description of the plugins functionality.
-    description: String,
+    pub description: String,
 
     /// The version of the plugin.
-    version: semver::Version,
+    pub version: semver::Version,
 
     /// Whether or not the plugin needs a database. If true, a database is created using the plugin
     /// name as the database name.
-    database: bool,
+    pub database: bool,
 }
 
 impl PluginMetadata {
