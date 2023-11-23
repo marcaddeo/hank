@@ -88,10 +88,7 @@ pub enum PluginResult {
 
 impl PluginResult {
     pub fn is_none(self) -> bool {
-        match self {
-            PluginResult::None => true,
-            _ => false,
-        }
+        matches!(self, PluginResult::None)
     }
 }
 
