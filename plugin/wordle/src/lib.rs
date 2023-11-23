@@ -7,6 +7,7 @@ mod wordle;
 #[host_fn]
 extern "ExtismHost" {
     pub fn send_message(message: Json<Message>);
+    pub fn db_query(query: String) -> String;
 }
 
 #[plugin_fn]
@@ -27,8 +28,12 @@ pub fn handle_message(Json(message): Json<Message>) -> FnResult<Json<PluginResul
         return Ok(Json(PluginResult::None));
     };
 
-    let response = message.response(&format!("{:?}", puzzle));
     unsafe {
+        let response = message.clone().response(&format!("{:?}", puzzle));
+        let _ = send_message(Json(response));
+
+        let res = db_query("SELECT 'hello world'".into()).unwrap();
+        let response = message.response(&format!("db result: {:?}", res));
         let _ = send_message(Json(response));
     }
 

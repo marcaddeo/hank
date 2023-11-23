@@ -25,6 +25,16 @@ impl Hank {
             .await;
     }
 
+    pub async fn query_database(&'static self, plugin_name: String, query: String) -> String {
+        for plugin in &self.plugins {
+            if plugin.metadata.name == plugin_name {
+                return plugin.query_database(query.clone()).await;
+            }
+        }
+
+        String::from("")
+    }
+
     async fn send_command(&'static self, command: PluginCommand) {
         let mut set = JoinSet::new();
 
